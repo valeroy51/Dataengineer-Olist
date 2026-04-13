@@ -1,0 +1,9 @@
+# Cache
+__pycache__/
+
+# VSCode
+.vscode/
+
+# Github
+.gitignore
+.git

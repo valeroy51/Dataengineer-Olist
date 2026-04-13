@@ -1,0 +1,11 @@
+# env
+.env
+
+# Cache
+__pycache__/
+
+# VSCode
+.vscode/
+
+# Git
+.git
