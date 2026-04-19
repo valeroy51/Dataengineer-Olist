@@ -9,3 +9,7 @@ __pycache__/
 
 # Git
 .git
+
+#  API
+.kaggle/kaggle.json
+data/
