@@ -1,10 +1,12 @@
-import pandas as pd
 import os
-from datetime import datetime
 
-def cleanData(dataName):
-    print(f"process data {dataName}")
-    noDuplicateMap={"olist_customers_dataset":["customer_id","customer_unique_id"],
+from pyspark.sql.functions import count, from_json, col, to_timestamp, when
+from pyspark.sql.functions import sum as spark_sum
+from pyspark.sql.types import DoubleType, StructType, StructField, StringType, DoubleType, StringType
+
+def cleanData(dataName,spark):
+    noDuplicateMap={
+        "olist_customers_dataset":["customer_id","customer_unique_id"],
         "olist_geolocation_dataset":None,
         "olist_orders_dataset":["order_id","customer_id"],
         "olist_order_items_dataset":["order_id","order_item_id"],
@@ -15,11 +17,93 @@ def cleanData(dataName):
         "product_category_name_translation":["product_category_name"]
     }
     
-    bronzePath = "./data/bronze"
     silverPath = "./data/silver"
-        
-    dataPath = os.path.join(bronzePath,f"{dataName}.csv")
+    os.makedirs(silverPath, exist_ok=True)
     
+    print(f"process data {dataName}")
+        
+    kafka =(spark.read
+            .format("kafka")
+            .option("kafka.bootstrap.servers", "kafka-1:29092,kafka-2:29093,kafka-3:29094")
+            .option("subscribe", dataName)
+            .option("startingOffsets", "earliest")
+            .load())
+    
+    dataRaw = kafka.selectExpr("CAST(value AS STRING) as json_str")
+    
+    dataRaw.show(5, False)
+    
+    schemaMap={
+        "olist_customers_dataset":StructType([
+            StructField("customer_id",StringType()),
+            StructField("customer_unique_id",StringType()),
+            StructField("customer_zip_code_prefix",DoubleType()),
+            StructField("customer_city",StringType()),
+            StructField("customer_state",StringType())]),
+        "olist_geolocation_dataset":StructType([
+            StructField("geolocation_zip_code_prefix",DoubleType()),
+            StructField("geolocation_lat",DoubleType()),
+            StructField("geolocation_lng",DoubleType()),
+            StructField("geolocation_city",StringType()),
+            StructField("geolocation_state",StringType())]),
+        "olist_orders_dataset":StructType([
+            StructField("order_id",StringType()),
+            StructField("customer_id",StringType()),
+            StructField("order_status",StringType()),
+            StructField("order_purchase_timestamp",StringType()),
+            StructField("order_approved_at",StringType()),
+            StructField("order_delivered_carrier_date",StringType()),
+            StructField("order_delivered_customer_date",StringType()),
+            StructField("order_estimated_delivery_date",StringType())]),
+        "olist_order_items_dataset":StructType([
+            StructField("order_id",StringType()),
+            StructField("order_item_id",DoubleType()),
+            StructField("product_id",StringType()),
+            StructField("seller_id",StringType()),
+            StructField("shipping_limit_date",StringType()),
+            StructField("price",DoubleType()),
+            StructField("freight_value",DoubleType())]),
+        "olist_order_payments_dataset":StructType([
+            StructField("order_id",StringType()),
+            StructField("payment_sequential",DoubleType()),
+            StructField("payment_type",StringType()),
+            StructField("payment_installments",DoubleType()),
+            StructField("payment_value",DoubleType()),]),
+        "olist_order_reviews_dataset":StructType([
+            StructField("review_id",StringType()),
+            StructField("order_id",StringType()),
+            StructField("review_score",DoubleType()),
+            StructField("review_comment_title",StringType()),
+            StructField("review_comment_message",StringType()),
+            StructField("review_creation_date",StringType()),
+            StructField("review_answer_timestamp",StringType())]),
+        "olist_products_dataset":StructType([
+            StructField("product_id",StringType()),
+            StructField("product_category_name",StringType()),
+            StructField("product_name_lenght",DoubleType()),
+            StructField("product_description_lenght",DoubleType()),
+            StructField("product_photos_qty",DoubleType()),
+            StructField("product_weight_g",DoubleType()),
+            StructField("product_length_cm",DoubleType()),
+            StructField("product_height_cm",DoubleType()),
+            StructField("product_width_cm",DoubleType())]),
+        "olist_sellers_dataset":StructType([
+            StructField("seller_id",StringType()),
+            StructField("seller_zip_code_prefix",DoubleType()),
+            StructField("seller_city",StringType()),
+            StructField("seller_state",StringType())]),
+        "product_category_name_translation":StructType([
+            StructField("product_category_name",StringType()),
+            StructField("product_category_name_english",StringType())])
+    }
+    
+    schema = schemaMap[dataName]
+    
+    dfParse = dataRaw.select(
+        from_json(col("json_str"), schema).alias("data")
+    ).select("data.*")
+    
+    #clean name data
     newName = dataName.replace("olist_","")
     newName = newName.replace("_dataset","")
     if not newName.endswith("_items") and "order_" in newName:
@@ -28,43 +112,38 @@ def cleanData(dataName):
     else:
         print(newName,"\n")
     
-    newPath = os.path.join(silverPath,f"{newName}.csv")
+    newPath = os.path.join(silverPath,f"{newName}")
     
-    newdata = pd.read_csv(dataPath)
+    dfClean = dfParse
     
-    totalNull = newdata.isnull().sum()
+    totalNull =  dfClean.select([
+        spark_sum(when(col(c).isNull(), 1).otherwise(0)).alias(c)
+        for c in dfClean.columns
+        ])
+    
     print("Column File")
-    print(totalNull,"\n")
+    totalNull.show()
+    
+    before = dfClean.select(count("*")).show()
     
     if noDuplicateMap[dataName]:
-        before = len(newdata)
-        newdata=newdata.drop_duplicates(subset=noDuplicateMap[dataName])
-        after=len(newdata)
-        print(before,"-",after,"\n")
+        dfClean=dfClean.dropDuplicates(subset=noDuplicateMap[dataName])
     else:
-        before = len(newdata)
-        newdata=newdata.drop_duplicates()
-        after=len(newdata)
-        print(before,"-",after,"\n")
+        dfClean=dfClean.dropDuplicates()
+        
+    after = dfClean.select(count("*")).show()
     
-    for col in newdata.columns:
-        if col.endswith("_date") or col.endswith("_timestamp") or col.endswith("_at"):
-            newdata[col] = pd.to_datetime(newdata[col],errors="coerce")
+    for c in dfClean.columns:
+        if c.endswith("_date") or c.endswith("_timestamp") or c.endswith("_at"):
+            dfClean = dfClean.withColumn(c, to_timestamp(col(c), "yyyy-MM-dd HH:mm:ss"))
             
-    newdata.to_csv(newPath,index=False)
-    
-    print(newdata.dtypes,"\n")
+    try:
+        dfClean.write \
+            .mode("overwrite") \
+            .parquet(newPath)
 
-# def validationData(dataName):
-#     silverPath = "./data/silver"
-#     goldPath = "./data/gold"
-    
-cleanData("olist_customers_dataset")
-cleanData("olist_geolocation_dataset")
-cleanData("olist_orders_dataset")
-cleanData("olist_order_items_dataset")
-cleanData("olist_order_payments_dataset")
-cleanData("olist_order_reviews_dataset")
-cleanData("olist_products_dataset")
-cleanData("olist_sellers_dataset")
-cleanData("product_category_name_translation")
+        print(f"[SUCCESS] Saved to {os.path.abspath(newPath)}")
+
+    except Exception as e:
+        print(f"[ERROR] Failed to write parquet for {dataName}")
+        raise e

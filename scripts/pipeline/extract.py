@@ -8,13 +8,10 @@ import pandas as pd
 import sys
 sys.path.append("/app")
 
-from scripts.utils.newTopic import newtopic
-
-
 def scrapeKaggle(kagglePath):
     kaggle.api.authenticate()
     
-    savePath="./data/raw"
+    savePath="./data/bronze"
     os.makedirs(savePath, exist_ok=True)
     
     kaggle.api.dataset_download_files(kagglePath, path=savePath, unzip=False)
@@ -35,9 +32,12 @@ def unzipData(dataPath):
     files=[]
     
     for file in os.listdir(bronzePath):
-        file = file.replace(".csv","")
-        files.append(file)
-        print(file)
+        if not file.endswith(".zip"):
+            file = file.replace(".csv","")
+            files.append(file)
+            print(file)
+        else:
+            pass
 
     return files
 
@@ -90,12 +90,3 @@ def publishData(topicList,server):
         produce.poll(0)
     
     produce.flush()
-
-
-pathdataset="olistbr/brazilian-ecommerce"
-test=scrapeKaggle(pathdataset)
-list = unzipData(test)
-# unzipData("./data/raw./brazilian-ecommerce.zip")
-for i in list:
-    newtopic(i)
-    publishData(i,"kafka-1:29092,kafka-2:29093,kafka-3:29094")

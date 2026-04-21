@@ -10,6 +10,8 @@ __pycache__/
 # Git
 .git
 
-#  API
+# API
 .kaggle/kaggle.json
+
+# Data
 data/

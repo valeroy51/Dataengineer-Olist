@@ -117,7 +117,7 @@ services:
       - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
       - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-1:29092,PLAINTEXT_HOST://localhost:9092
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=2 #3
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 #3
       - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
     depends_on:
       - zookeeper
@@ -138,7 +138,7 @@ services:
       - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9093
       - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-2:29093,PLAINTEXT_HOST://localhost:9093
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=2 #3
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3 #3
       - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
     depends_on:
       - zookeeper
@@ -206,12 +206,14 @@ services:
     ports:
       - 7077:7077
       - 8083:8080
+    volumes:
+      - .:/app
     networks:
       - network-engineer
 
   spark-worker-1:
     container_name: spark-worker-1
-    build: ./docker/spark
+    # build: ./docker/spark
     image: custom-spark:1.0
     command: > 
       /opt/spark/bin/spark-class
@@ -221,12 +223,14 @@ services:
       - 8081:8081
     depends_on:
       - spark-master
+    volumes:
+      - .:/app
     networks:
       - network-engineer
 
   spark-worker-2:
     container_name: spark-worker-2
-    build: ./docker/spark
+    # build: ./docker/spark
     image: custom-spark:1.0
     command: > 
       /opt/spark/bin/spark-class
@@ -236,6 +240,8 @@ services:
       - 8082:8082
     depends_on:
       - spark-master
+    volumes:
+      - .:/app
     networks:
       - network-engineer
 
