@@ -8,11 +8,30 @@ import pandas as pd
 import sys
 sys.path.append("/app")
 
-def pathData():
-    Path = "./data/bronze"
+def scrapeKaggle(kagglePath):
+    kaggle.api.authenticate()
+    
+    savePath="./data/bronze"
+    os.makedirs(savePath, exist_ok=True)
+    
+    kaggle.api.dataset_download_files(kagglePath, path=savePath, unzip=False)
+    
+    zipPath=kagglePath.split("/")[-1]+".zip"
+    name=os.path.join(savePath,zipPath)
+    
+    return name
+
+def unzipData(dataPath):
+    bronzePath = "./data/bronze"
+    
+    os.makedirs(bronzePath, exist_ok=True)
+    
+    with zipfile.ZipFile(dataPath,"r") as zip:
+        zip.extractall(bronzePath)
+    
     files=[]
     
-    for file in os.listdir(Path):
+    for file in os.listdir(bronzePath):
         if not file.endswith(".zip"):
             file = file.replace(".csv","")
             files.append(file)
@@ -46,9 +65,9 @@ def publishData(topicList,server):
         'enable.idempotence': True,
     })
     
-    kagglePath = "./data/bronze"
+    bronzePath = "./data/bronze"
         
-    dataPath = os.path.join(kagglePath,f"{topicList}.csv")
+    dataPath = os.path.join(bronzePath,f"{topicList}.csv")
     data = pd.read_csv(dataPath)
     
     for row in data.itertuples(index=False):

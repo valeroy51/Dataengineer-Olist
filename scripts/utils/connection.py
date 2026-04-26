@@ -1,15 +1,20 @@
 import psycopg2
 import sqlalchemy
-from pyspark import SparkContext
+from pyspark import SparkContext, join
 from pyspark.sql import SparkSession
+import os
+from dotenv import load_dotenv
 
-def connection(HostDB, DBName, DBUser, DBPassword, DBPort):
+load_dotenv()
+
+def connection(DBName):
+    
     con = psycopg2.connect(
-        host = HostDB,
+        host = "postgres",
         dbname = DBName,
-        user = DBUser,
-        password = DBPassword,
-        port = DBPort
+        user = os.getenv("POSTGRES_USER"),
+        password = os.getenv("POSTGRES_PASSWORD"),
+        port = 5432
     )
 
     return con
@@ -19,13 +24,14 @@ def sparkConnection():
         SparkSession.builder
         .appName("ecommerce")
         .master("spark://spark-master:7077")
-        .config("spark.sql.streaming.metricsEnabled", "false")
-        .config("spark.jars.packages",
-                ",".join([
-                    "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1"
-                    # "org.apache.hadoop:hadoop-aws:3.4.2",
-                    # "com.amazonaws:aws-java-sdk-bundle:1.12.367"
-                ]))
+        .config("spark.executorEnv.PYTHONPATH", "/app")
+        .config(
+            "spark.jars.packages",
+            ",".join([
+            "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1",
+            "org.postgresql:postgresql:42.7.3"
+            ])
+        )
         .getOrCreate()
     )
     

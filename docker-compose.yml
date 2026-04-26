@@ -197,7 +197,9 @@ services:
   # Spark
   spark-master:
     container_name: spark-master
-    build: ./docker/spark
+    build: 
+      context: .
+      dockerfile: ./docker/spark/dockerfile
     image: custom-spark:1.0
     hostname: spark-master
     command: > 
@@ -213,7 +215,6 @@ services:
 
   spark-worker-1:
     container_name: spark-worker-1
-    # build: ./docker/spark
     image: custom-spark:1.0
     command: > 
       /opt/spark/bin/spark-class
@@ -230,7 +231,6 @@ services:
 
   spark-worker-2:
     container_name: spark-worker-2
-    # build: ./docker/spark
     image: custom-spark:1.0
     command: > 
       /opt/spark/bin/spark-class
