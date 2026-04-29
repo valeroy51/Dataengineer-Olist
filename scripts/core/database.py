@@ -35,13 +35,11 @@ def createSchemaTable(SchemaName, DBName):
     
     cur.execute(f"""
                 create table if not exists {SchemaName}.dimgeolocation(
-                    geoId serial primary key,
-                    zipCode int,
+                    zipCode int primary key,
                     latitude double precision,
-                    longtitude double precision,
+                    longitude double precision,
                     city varchar(50),
-                    state varchar(50),
-                    unique(zipCode, latitude, longtitude)
+                    state varchar(50)
                     );
                     """)
 
@@ -57,7 +55,7 @@ def createSchemaTable(SchemaName, DBName):
     cur.execute(f"""
                 create table if not exists {SchemaName}.dimcustomers(
                     customerId varchar(50) primary key,
-                    UniqueId varchar(50),
+                    uniqueId varchar(50),
                     zipCode int,
                     city varchar(50),
                     state varchar(50)
@@ -77,37 +75,28 @@ def createSchemaTable(SchemaName, DBName):
                     widthCm int
                 );
                 """)
-    
+
     cur.execute(f"""
-                create table if not exists {SchemaName}.dimorders(
-                    orderId varchar(50) primary key,
-                    customerId varchar(50),
-                    status varchar(25),
-                    purchaseTimestamp timestamp,
-                    approvedAt timestamp,
-                    deliveredCarrierDate timestamp,
-                    deliveredCustomerDate timestamp,
-                    estimatedDeliveryDate timestamp
+                create table if not exists {SchemaName}.dimpurchasedate(
+                    dateId int primary key,
+                    datePurchase timestamp,
+                    year int,
+                    month int,
+                    day int
                 );
                 """)
-    
+
     cur.execute(f"""
-                create table if not exists {SchemaName}.factsales(
+                create table if not exists {SchemaName}.factpayments(
                     orderId varchar(50),
-                    itemId int,
-                    customerId varchar(50),
-                    sellerId varchar(50),
-                    productId varchar(50),
-                    status varchar(25),
-                    price double precision,
-                    freightValue double precision,
-                    primary key(orderId, itemId),
-                    foreign key(customerId) references {SchemaName}.dimcustomers(customerId),
-                    foreign key(sellerId) references {SchemaName}.dimsellers(sellerId),
-                    foreign key(productId) references {SchemaName}.dimproducts(productId)
+                    sequential int,
+                    type varchar(30),
+                    installments int,
+                    value double precision,
+                    primary key(orderId, sequential)
                 );
                 """)
-    
+
     cur.execute(f"""
                 create table if not exists {SchemaName}.factreviews(
                     factId serial primary key,
@@ -122,14 +111,21 @@ def createSchemaTable(SchemaName, DBName):
                 """)
     
     cur.execute(f"""
-                create table if not exists {SchemaName}.factpayments(
+                create table if not exists {SchemaName}.factsales(
                     orderId varchar(50),
-                    sequential int,
-                    type varchar(30),
-                    installments int,
-                    value double precision,
-                    primary key(orderId, sequential),
-                    foreign key(orderId) references {SchemaName}.dimorders(orderId)
+                    itemId int,
+                    customerId varchar(50),
+                    sellerId varchar(50),
+                    productId varchar(50),
+                    dateId int,
+                    status varchar(30),
+                    price double precision,
+                    freightValue double precision,
+                    primary key(orderId, itemId),
+                    foreign key(customerId) references {SchemaName}.dimcustomers(customerId),
+                    foreign key(sellerId) references {SchemaName}.dimsellers(sellerId),
+                    foreign key(productId) references {SchemaName}.dimproducts(productId),
+                    foreign key(dateId) references {SchemaName}.dimpurchasedate(dateId)
                 );
                 """)
     

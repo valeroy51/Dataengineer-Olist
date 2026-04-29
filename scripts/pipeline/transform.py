@@ -1,9 +1,10 @@
 import os
 import sys
 sys.path.append("/app")
+from pyspark.sql import Window
 from unidecode import unidecode
 
-from pyspark.sql.functions import coalesce, count, create_map, round, from_json, col, lit, regexp_replace, to_timestamp, udf, when
+from pyspark.sql.functions import coalesce, count, create_map, dayofmonth, first, month, round, from_json, col, lit, regexp_replace, row_number, to_date, to_timestamp, udf, when, year
 from pyspark.sql.functions import sum as spark_sum
 from pyspark.sql.types import DoubleType, StructType, StructField, StringType, DoubleType, StringType
 
@@ -45,7 +46,7 @@ def cleanData(dataName,spark):
     
     dataRaw = kafka.selectExpr("CAST(value AS STRING) as json_str")
     
-    dataRaw.show(5, False)
+    # dataRaw.show(5, False)
     
     schemaMap={
         "olist_customers_dataset":StructType([
@@ -135,8 +136,8 @@ def cleanData(dataName,spark):
         for c in dfClean.columns
         ])
     
-    print("Column File")
-    totalNull.show()
+    # print("Column File")
+    # totalNull.show()
     
     normalize_udf = udf(normalizeText, StringType())
     
@@ -154,14 +155,14 @@ def cleanData(dataName,spark):
         elif c.endswith("_lat") or c.endswith("_lng"):
             dfClean = dfClean.withColumn(c, round(col(c),6))
 
-    before = dfClean.select(count("*")).show()
+    # before = dfClean.select(count("*")).show()
         
     if noDuplicateMap[dataName]:
         dfClean=dfClean.dropDuplicates(subset=noDuplicateMap[dataName])
     else:
         dfClean=dfClean.dropDuplicates()
         
-    after = dfClean.select(count("*")).show()
+    # after = dfClean.select(count("*")).show()
     
     try:
         dfClean.write \
@@ -218,12 +219,37 @@ def goldData(spark):
         
     mappingState = create_map([lit(x) for x in sum(stateMap.items(),())])
     
-    dim_geolocation = geolocation.select(
-                                    "geolocation_zip_code_prefix",
-                                    "geolocation_lat",
-                                    "geolocation_lng",
-                                    "geolocation_city",
-                                    mappingState[col("geolocation_state")].alias("geolocation_state")
+    # dim_geolocation = geolocation.select(
+    #                                 "geolocation_zip_code_prefix",
+    #                                 "geolocation_lat",
+    #                                 "geolocation_lng",
+    #                                 "geolocation_city",
+    #                                 mappingState[col("geolocation_state")].alias("geolocation_state")
+    #                             )
+    
+    
+    dim_geolocation = (geolocation.orderBy("geolocation_zip_code_prefix","geolocation_lat")
+                        .groupBy("geolocation_zip_code_prefix")
+                        .agg(
+                            first("geolocation_lat").alias("geolocation_lat"),
+                            first("geolocation_lng").alias("geolocation_lng"),
+                            first("geolocation_city").alias("geolocation_city"),
+                            first(mappingState[col("geolocation_state")]).alias("geolocation_state")
+                        ))
+    
+    dim_geolocation = dim_geolocation.withColumn(
+                                        "geolocation_zip_code_prefix", col("geolocation_zip_code_prefix").cast("int")
+                                    )
+
+    dim_sellers = sellers.select(
+                            "seller_id", 
+                            "seller_zip_code_prefix", 
+                            "seller_city", 
+                            mappingState[col("seller_state")].alias("seller_state")
+                        )
+
+    dim_sellers = dim_sellers.withColumn(
+                                    "seller_zip_code_prefix", col("seller_zip_code_prefix").cast("int")
                                 )
     
     dim_customers = customers.select(
@@ -234,14 +260,11 @@ def goldData(spark):
                                 mappingState[col("customer_state")].alias("customer_state")
                             )
     
-    dim_sellers = sellers.select(
-                            "seller_id", 
-                            "seller_zip_code_prefix", 
-                            "seller_city", 
-                            mappingState[col("seller_state")].alias("seller_state")
-                        )
+    dim_customers = dim_customers.withColumn(
+                                        "customer_zip_code_prefix", col("customer_zip_code_prefix").cast("int")
+                                    )
     
-    dim_products = products.join(product_category_name_translation, "product_category_name", "left") \
+    dim_products = (products.join(product_category_name_translation, "product_category_name", "left")
                             .select(
                                 "product_id", 
                                 coalesce("product_category_name_english", "product_category_name").alias("product_category_name"),
@@ -252,18 +275,21 @@ def goldData(spark):
                                 "product_length_cm",
                                 "product_height_cm",
                                 "product_width_cm"
-                            )
+                            ))
     
-    dim_orders = orders.select(
-                            "order_id",
-                            "customer_id",
-                            "order_status", 
-                            "order_purchase_timestamp",
-                            "order_approved_at",
-                            "order_delivered_carrier_date",
-                            "order_delivered_customer_date",
-                            "order_estimated_delivery_date"
+    orders = orders.withColumn("purchase_date",to_date("order_purchase_timestamp"))
+    
+    
+    dim_purchase_date = (orders.select(
+                            "purchase_date").dropDuplicates()
+                                .withColumn("day", dayofmonth("purchase_date"))
+                                .withColumn("month", month("purchase_date"))
+                                .withColumn("year", year("purchase_date"))
                         )
+    
+    window = Window.orderBy("purchase_date")
+    
+    dim_purchase_date = dim_purchase_date.withColumn("date_id", row_number().over(window))
     
     fact_payments = payments.select(
                             "order_id",
@@ -283,18 +309,20 @@ def goldData(spark):
                             "review_answer_timestamp"
                         )
     
-    fact_sales = order_items \
-                .join(orders, "order_id", "left") \
-                .select(
-                    "order_id", 
+    fact_sales = (order_items
+                    .join(orders.select("order_id", "customer_id", "order_status", "purchase_date"), "order_id", "left")
+                    .join(dim_purchase_date, "purchase_date", "left")
+                    .select(
+                    "order_id",
                     "order_item_id",
                     "customer_id",
                     "seller_id",
                     "product_id",
+                    "date_id",
                     "order_status",
                     "price",
-                    "freight_value",
-                )
+                    "freight_value"
+                ))
     
     goldPath = "./data/gold"
     
@@ -302,7 +330,7 @@ def goldData(spark):
     dimGeolocationPath = os.path.join(goldPath,"dim_geolocation")
     dimProductsPath = os.path.join(goldPath,"dim_products")
     dimSellersPath = os.path.join(goldPath,"dim_sellers")
-    dimOrdersPath = os.path.join(goldPath,"dim_orders")
+    dimPurchaseDate = os.path.join(goldPath,"dim_purchase_date")
     factSalesPath = os.path.join(goldPath,"fact_sales")
     factPayments = os.path.join(goldPath,"fact_payments")
     factReviews = os.path.join(goldPath,"fact_reviews")
@@ -311,7 +339,7 @@ def goldData(spark):
     dim_geolocation.write.mode("overwrite").format("parquet").save(dimGeolocationPath)
     dim_products.write.mode("overwrite").format("parquet").save(dimProductsPath)
     dim_sellers.write.mode("overwrite").format("parquet").save(dimSellersPath)
-    dim_orders.write.mode("overwrite").format("parquet").save(dimOrdersPath)
+    dim_purchase_date.write.mode("overwrite").format("parquet").save(dimPurchaseDate)
     fact_sales.write.mode("overwrite").format("parquet").save(factSalesPath)
     fact_payments.write.mode("overwrite").format("parquet").save(factPayments)
     fact_reviews.write.mode("overwrite").format("parquet").save(factReviews)

@@ -10,29 +10,36 @@ def loadData(spark, DBName, schema):
     url = f"jdbc:postgresql://postgres:5432/{DBName}"
     
     tables = {
-    "dimcustomers" : "./data/gold/dim_customers/",
-    "dimsellers" : "./data/gold/dim_sellers/",
-    "dimproducts" : "./data/gold/dim_products/",
     "dimgeolocation" :"./data/gold/dim_geolocation/",
-    "dimorders" :"./data/gold/dim_orders/",
+    "dimsellers" : "./data/gold/dim_sellers/",
+    "dimcustomers" : "./data/gold/dim_customers/",
+    "dimproducts" : "./data/gold/dim_products/",
+    "dimpurchasedate" :"./data/gold/dim_purchase_date/",
     "factpayments" : "./data/gold/fact_payments/",
     "factreviews" : "./data/gold/fact_reviews/",
     "factsales" : "./data/gold/fact_sales/"
     }
     
     mapColumn = {
-    "dimcustomers" : {
-        "customer_id" : "customerId", 
-        "customer_unique_id" : "UniqueId", 
-        "customer_zip_code_prefix" : "zipCode", 
-        "customer_city" : "city", 
-        "customer_state" : "state"
+    "dimgeolocation" : {
+        "geolocation_zip_code_prefix" : "zipCode",
+        "geolocation_lat" : "latitude",
+        "geolocation_lng" : "longitude",
+        "geolocation_city" : "city",
+        "geolocation_state" : "state"
         },
     "dimsellers" : {
         "seller_id" : "sellerId", 
         "seller_zip_code_prefix" : "zipCode", 
         "seller_city" : "city", 
         "seller_state" : "state"
+        },
+    "dimcustomers" : {
+        "customer_id" : "customerId", 
+        "customer_unique_id" : "uniqueId", 
+        "customer_zip_code_prefix" : "zipCode", 
+        "customer_city" : "city", 
+        "customer_state" : "state"
         },
     "dimproducts" : {
         "product_id" : "productId", 
@@ -45,32 +52,20 @@ def loadData(spark, DBName, schema):
         "product_height_cm" : "heightCm",
         "product_width_cm" : "widthCm"
         },
-    "dimgeolocation" : {
-        "geolocation_zip_code_prefix" : "zipCode",
-        "geolocation_lat" : "latitude",
-        "geolocation_lng" : "longtitude",
-        "geolocation_city" : "city",
-        "geolocation_state" : "state"
-        },
-    "dimorders" : {
-        "order_id" : "orderId",
-        "customer_id" : "customerId",
-        "order_status" : "status",
-        "order_purchase_timestamp" : "purchaseTimestamp",
-        "order_approved_at" : "approvedAt",
-        "order_delivered_carrier_date" : "deliveredCarrierDate",
-        "order_delivered_customer_date" : "deliveredCustomerDate",
-        "order_estimated_delivery_date" : "estimatedDeliveryDate"
+
+    "dimpurchasedate" : {
+        "date_id" : "dateId",
+        "purchase_date" : "datePurchase",
+        "year" : "year",
+        "month" : "month",
+        "day" : "day"
     },
-    "factsales" : {
-        "order_id" : "orderId", 
-        "order_item_id" : "itemId",
-        "customer_id" : "customerId",
-        "seller_id" : "sellerId",
-        "product_id" : "productId",
-        "order_status" : "status",
-        "price" : "price",
-        "freight_value" : "freightValue"
+    "factpayments" : {
+        "order_id" : "orderId",
+        "payment_sequential" : "sequential",
+        "payment_type" : "type",
+        "payment_installments" : "installments",
+        "payment_value" : "value"
     },
     "factreviews" : {
         "review_id" : "reviewId",
@@ -81,12 +76,16 @@ def loadData(spark, DBName, schema):
         "review_creation_date" : "creationDate",
         "review_answer_timestamp" : "answertimestamp",
     },
-    "factpayments" : {
-        "order_id" : "orderId",
-        "payment_sequential" : "sequential",
-        "payment_type" : "type",
-        "payment_installments" : "installments",
-        "payment_value" : "value"
+    "factsales" : {
+        "order_id" : "orderId", 
+        "order_item_id" : "itemId",
+        "customer_id" : "customerId",
+        "seller_id" : "sellerId",
+        "product_id" : "productId",
+        "date_id" : "dateId",
+        "order_status" : "status",
+        "price" : "price",
+        "freight_value" : "freightValue"
     }
     }
     
@@ -108,3 +107,5 @@ def loadData(spark, DBName, schema):
             .option("numPartitions", 6) \
             .mode("append") \
             .save()
+        
+        print(f"data table {table} berhasil dimasukkan")
