@@ -1,6 +1,6 @@
 # Data Engineering Pipeline - Olist E-Commerce
 
-`<img width="1334" height="874" alt="Image" src="https://github.com/user-attachments/assets/c908e929-faa8-4f0e-9a7e-6d4930cdaf0b" />`{=html}
+<img width="1334" height="874" alt="Image" src="https://github.com/user-attachments/assets/c908e929-faa8-4f0e-9a7e-6d4930cdaf0b"/>
 
 This pipeline builds an end-to-end data engineering workflow using: -
 Kafka (streaming ingestion) - Spark (data processing) - Airflow
