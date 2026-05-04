@@ -8,6 +8,10 @@ from pyspark.sql.functions import coalesce, count, create_map, dayofmonth, first
 from pyspark.sql.functions import sum as spark_sum
 from pyspark.sql.types import DoubleType, StructType, StructField, StringType, DoubleType, StringType
 
+from scripts.utils.logger import getLog
+
+logger = getLog(__name__)
+
 def normalizeText(text):
     if text is None:
         return None
@@ -19,7 +23,8 @@ def normalizeText(text):
         
     return unidecode(text.lower())
 
-def cleanData(dataName,spark):
+def silverData(dataName,spark):
+    logger.info(f"[SILVER] Start processing Data : {dataName}")
     noDuplicateMap={
         "olist_customers_dataset":["customer_id","customer_unique_id"],
         "olist_geolocation_dataset":["geolocation_zip_code_prefix", "geolocation_lat", "geolocation_lng"],
@@ -35,7 +40,7 @@ def cleanData(dataName,spark):
     silverPath = "./data/silver"
     os.makedirs(silverPath, exist_ok=True)
     
-    print(f"process data {dataName}")
+    logger.info(f"[SILVER] [READ] Reading from Kafka Topic : {dataName}")
         
     kafka =(spark.read
             .format("kafka")
@@ -45,8 +50,6 @@ def cleanData(dataName,spark):
             .load())
     
     dataRaw = kafka.selectExpr("CAST(value AS STRING) as json_str")
-    
-    # dataRaw.show(5, False)
     
     schemaMap={
         "olist_customers_dataset":StructType([
@@ -123,9 +126,9 @@ def cleanData(dataName,spark):
     newName = newName.replace("_dataset","")
     if not newName.endswith("_items") and "order_" in newName:
         newName = newName.replace("order_","")
-        print(newName,"\n")
+        logger.info(f"[SILVER] [TRANSFORM] Output table name : {newName}")
     else:
-        print(newName,"\n")
+        logger.info(f"[SILVER] [TRANSFORM] Output table name : {newName}")
         
     newPath = os.path.join(silverPath,f"{newName}")
     
@@ -136,16 +139,15 @@ def cleanData(dataName,spark):
         for c in dfClean.columns
         ])
     
-    # print("Column File")
-    # totalNull.show()
+    row = totalNull.collect()[0]
     
-    print("=== DEBUG KAFKA COUNT ===")
-    print(kafka.count())
-
-    print("=== DEBUG PARSED COUNT ===")
-    print(dfParse.count())
+    nullLog = "\n".join([f"{col}: {row[col]}" for col in totalNull.columns])
+    
+    logger.info(f"[SILVER] [INFO] {dataName} - NULL summary : \n {nullLog}")
     
     normalize_udf = udf(normalizeText, StringType())
+    
+    logger.info(f"[SILVER] [TRANSFORM] Cleaning column Table : {dataName}")
     
     for c in dfClean.columns:
         if c.endswith("_date") or c.endswith("_timestamp") or c.endswith("_at"):
@@ -161,28 +163,33 @@ def cleanData(dataName,spark):
         elif c.endswith("_lat") or c.endswith("_lng"):
             dfClean = dfClean.withColumn(c, round(col(c),6))
 
-    # before = dfClean.select(count("*")).show()
+    before = dfClean.count()
         
     if noDuplicateMap[dataName]:
         dfClean=dfClean.dropDuplicates(subset=noDuplicateMap[dataName])
     else:
         dfClean=dfClean.dropDuplicates()
         
-    # after = dfClean.select(count("*")).show()
+    after = dfClean.count()
+    
+    logger.info(f"[SILVER] [INFO] Deduplication table {dataName} : before > {before}, after > {after}")
     
     try:
+        logger.info(f"[SILVER] [WRITE] Writing Parquet to : {newPath}")
+
         dfClean.write \
             .mode("overwrite") \
             .parquet(newPath)
 
-        print(f"[SUCCESS] Saved to {os.path.abspath(newPath)}")
+        logger.info(f"[SILVER] Success writing parquet table : {dataName}")
 
     except Exception as e:
-        print(f"[ERROR] Failed to write parquet for {dataName}")
+        logger.error(f"[SILVER] [ERROR] Failed to write parquet : {dataName}")
         raise e
+    
+    logger.info(f"[SILVER] Finished processing: {dataName}")
 
 def goldData(spark):
-    
     customers = spark.read.parquet("./data/silver/customers/")
     sellers = spark.read.parquet("./data/silver/sellers/")
     products = spark.read.parquet("./data/silver/products/")
@@ -225,6 +232,7 @@ def goldData(spark):
         
     mappingState = create_map([lit(x) for x in sum(stateMap.items(),())])
     
+    logger.info(f"[GOLD] [TRANSFORM] Proceed data : dim_geolocation")
     dim_geolocation = (geolocation.orderBy("geolocation_zip_code_prefix","geolocation_lat")
                         .groupBy("geolocation_zip_code_prefix")
                         .agg(
@@ -238,6 +246,7 @@ def goldData(spark):
                                         "geolocation_zip_code_prefix", col("geolocation_zip_code_prefix").cast("int")
                                     )
 
+    logger.info(f"[GOLD] [TRANSFORM] Proceed data : dim_sellers")
     dim_sellers = sellers.select(
                             "seller_id", 
                             "seller_zip_code_prefix", 
@@ -249,6 +258,7 @@ def goldData(spark):
                                     "seller_zip_code_prefix", col("seller_zip_code_prefix").cast("int")
                                 )
     
+    logger.info(f"[GOLD] [TRANSFORM] Proceed data : dim_customers")
     dim_customers = customers.select(
                                 "customer_id", 
                                 "customer_unique_id", 
@@ -261,6 +271,7 @@ def goldData(spark):
                                         "customer_zip_code_prefix", col("customer_zip_code_prefix").cast("int")
                                     )
     
+    logger.info(f"[GOLD] [TRANSFORM] Proceed data : dim_products")
     dim_products = (products.join(product_category_name_translation, "product_category_name", "left")
                             .select(
                                 "product_id", 
@@ -274,8 +285,8 @@ def goldData(spark):
                                 "product_width_cm"
                             ))
     
+    logger.info(f"[GOLD] [TRANSFORM] Proceed data : dim_purchase_date")
     orders = orders.withColumn("purchase_date",to_date("order_purchase_timestamp","yyyy-MM-dd"))
-    
     
     dim_purchase_date = (orders.select(
                             "purchase_date").dropDuplicates()
@@ -296,6 +307,7 @@ def goldData(spark):
                                             "day"
                                         )
     
+    logger.info(f"[GOLD] [TRANSFORM] Proceed data : fact_payments")
     fact_payments = payments.select(
                             "order_id",
                             "payment_sequential",
@@ -304,6 +316,7 @@ def goldData(spark):
                             "payment_value"
                         )
     
+    logger.info(f"[GOLD] [TRANSFORM] Proceed data : fact_reviews")
     reviews = reviews.withColumn("purchase_date",to_date("review_creation_date","yyyy-MM-dd"))
     
     fact_reviews = reviews.select(
@@ -316,6 +329,7 @@ def goldData(spark):
                             "review_answer_timestamp"
                         )
     
+    logger.info(f"[GOLD] [TRANSFORM] Proceed data : fact_sales")
     fact_sales = (order_items
                     .join(orders.select("order_id", "customer_id", "order_status", "purchase_date"), "order_id", "left")
                     .join(dim_purchase_date, "purchase_date", "left")
@@ -329,7 +343,7 @@ def goldData(spark):
                     "order_status",
                     "price",
                     "freight_value",
-                    (coalesce(col("price"), lit(0))+coalesce(col("freight_value"), lit(0))).alias("total_price")
+                    round(coalesce(col("price"), lit(0))+coalesce(col("freight_value"), lit(0)),2).alias("total_price")
                 ))
     
     goldPath = "./data/gold"
@@ -343,11 +357,27 @@ def goldData(spark):
     factPayments = os.path.join(goldPath,"fact_payments")
     factReviews = os.path.join(goldPath,"fact_reviews")
     
-    dim_customers.write.mode("overwrite").format("parquet").save(dimCustomerPath)
-    dim_geolocation.write.mode("overwrite").format("parquet").save(dimGeolocationPath)
-    dim_products.write.mode("overwrite").format("parquet").save(dimProductsPath)
-    dim_sellers.write.mode("overwrite").format("parquet").save(dimSellersPath)
-    dim_purchase_date.write.mode("overwrite").format("parquet").save(dimPurchaseDate)
-    fact_sales.write.mode("overwrite").format("parquet").save(factSalesPath)
-    fact_payments.write.mode("overwrite").format("parquet").save(factPayments)
-    fact_reviews.write.mode("overwrite").format("parquet").save(factReviews)
+    write = {
+        "dim_geolocation": (dim_geolocation, dimGeolocationPath),
+        "dim_sellers": (dim_sellers, dimSellersPath),
+        "dim_customers": (dim_customers, dimCustomerPath),
+        "dim_products": (dim_products, dimProductsPath),
+        "dim_purchase_date": (dim_purchase_date, dimPurchaseDate),
+        "fact_payments": (fact_payments, factPayments),
+        "fact_reviews": (fact_reviews, factReviews),
+        "fact_sales": (fact_sales, factSalesPath),
+    }
+    
+    for name, (data, path) in write.items():
+        try:
+            logger.info(f"[GOLD] [WRITE] Writing Parquet {name} to : {path}")
+
+            data.write.mode("overwrite").format("parquet").save(path)
+
+            logger.info(f"[GOLD] Success writing parquet table : {name}")
+
+        except Exception as e:
+            logger.error(f"[GOLD] [ERROR] Failed to write parquet : {name}")
+            raise e
+    
+    logger.info(f"[GOLD] Finished processing all Table")

@@ -9,7 +9,7 @@ sys.path.append("/opt/airflow")
 from scripts.pipeline.load import loadData
 from scripts.core.database import createDB, createSchemaTable
 from scripts.pipeline.extract import pathData, publishData
-from scripts.pipeline.transform import cleanData, goldData
+from scripts.pipeline.transform import silverData, goldData
 from scripts.utils.newTopic import newtopic
 from scripts.utils.connection import sparkConnection
 
@@ -32,7 +32,7 @@ def silver(**context):
     spark = sparkConnection()
     list = context['ti'].xcom_pull(task_ids = 'checkdata', key='list_data')
     for i in list: 
-        cleanData(i,spark)
+        silverData(i,spark)
 
 def gold():
     spark = sparkConnection()
@@ -51,7 +51,8 @@ def toDatabase():
 with DAG(
     dag_id = "pipeline_olist_ecommerce",
     schedule = None,
-    catchup = False
+    catchup = False,
+    max_active_runs=1,
 ) as dag:
     
     check_data = PythonOperator(

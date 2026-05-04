@@ -6,6 +6,10 @@ import pandas as pd
 import sys
 sys.path.append("/app")
 
+from scripts.utils.logger import getLog
+
+logger = getLog(__name__)
+
 def pathData():
     Path = "./data/bronze"
     files=[]
@@ -14,14 +18,14 @@ def pathData():
         if not file.endswith(".zip"):
             file = file.replace(".csv","")
             files.append(file)
-            print(file)
+            logger.info(f"[EXTRACT] Found file data : {file}")
         else:
             pass
 
     return files
 
 def publishData(topicList,server):
-    print(f"data {topicList} dikirim ke kafka")
+    logger.info(f"[EXTRACT] Start publish Data : {topicList}")
     
     keyTopic = {"olist_customers_dataset":["customer_id"],
                 "olist_geolocation_dataset":["geolocation_zip_code_prefix","geolocation_lat","geolocation_lng"],
@@ -34,15 +38,11 @@ def publishData(topicList,server):
                 "product_category_name_translation":["product_category_name"]
                 }
     
-    # def report(error,msg):
-    #     if error is not None:
-    #         print (f" Terjadi error : {error}\n")
-    #     else:
-    #         print(f"message berhasil dipublish ke {msg.topic()} partition {msg.partition()} offset {msg.offset()}\n")
-            
-    def report(error, msg):
+    def report(error,msg):
         if error is not None:
-            print(f"Error: {error}")
+            logger.error(f"[EXTRACT] [ERROR] Delivery data failed : {error}")
+        # else:
+        #     logger.debug(f"[EXTRACT] Publish data to Topic {msg.topic()} | partition {msg.partition()} | offset {msg.offset()}")
     
     produce = Producer({
         'bootstrap.servers': server,
@@ -54,8 +54,13 @@ def publishData(topicList,server):
     kagglePath = "./data/bronze"
         
     dataPath = os.path.join(kagglePath,f"{topicList}.csv")
+    
+    logger.info(f"[EXTRACT] [READ] Start reading data : {topicList}")
     data = pd.read_csv(dataPath)
     
+    count = 0
+    
+    logger.info(f"[EXTRACT] [KAFKA] Publish data : {topicList}")
     for i, row in enumerate(data.itertuples(index=False)):
         message= {
             column: (None if pd.isna(value) else value)
@@ -73,15 +78,20 @@ def publishData(topicList,server):
                             value=json.dumps(message).encode("utf-8"),
                             callback=report
                             )
+            count += 1
         except BufferError:
+            logger.warning(f"[EXTRACT] [KAFKA] Buffer full, Polling data")
             produce.poll(1)
             produce.produce(topicList, 
                             key=key.encode(),
                             value=json.dumps(message).encode("utf-8"),
                             callback=report
                             )
+            count += 1
         
-        if i % 1000 == 0:
+        if count % 1000 == 0:
+            logger.info(f"[EXTRACT] publish {count} data")
             produce.poll(0)
-    
+            
     produce.flush()
+    logger.info(f"[EXTRACT] Success publish data : {topicList}")

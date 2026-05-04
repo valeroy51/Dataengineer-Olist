@@ -5,7 +5,7 @@ sys.path.append("/app")
 from scripts.pipeline.load import loadData
 from scripts.core.database import createDB, createSchemaTable
 from scripts.pipeline.extract_from_kaggle import publishData, unzipData, scrapeKaggle
-from scripts.pipeline.transform import cleanData, goldData
+from scripts.pipeline.transform import silverData, goldData
 from scripts.utils.newTopic import newtopic
 from scripts.utils.connection import sparkConnection
 
@@ -22,7 +22,7 @@ for i in list:
     publishData(i,"kafka-1:29092,kafka-2:29093,kafka-3:29094")
     
 for i in list: 
-    cleanData(i,spark)
+    silverData(i,spark)
     
 goldData(spark)
 
@@ -43,7 +43,7 @@ total_minutes = total_time / 60
 print(f"Total time: {total_minutes:.4f} minutes")
 
 # unzipData("./data/raw./brazilian-ecommerce.zip")
-# cleanData("product_category_name_translation")
+# silverData("product_category_name_translation")
 
 
 # # ekstract >> ctopic >> cdb >> kafka >> clean>>dim>>fact
