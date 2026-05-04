@@ -1,84 +1,86 @@
 # Data Engineering Pipeline - Olist E-Commerce
 
-<img width="1334" height="874" alt="Image" src="https://github.com/user-attachments/assets/c908e929-faa8-4f0e-9a7e-6d4930cdaf0b" />
+`<img width="1334" height="874" alt="Image" src="https://github.com/user-attachments/assets/c908e929-faa8-4f0e-9a7e-6d4930cdaf0b" />`{=html}
 
-Pipeline ini membangun end-to-end data engineering workflow menggunakan:
-- Kafka (streaming ingestion)
-- Spark (data processing)
-- Airflow (orchestration)
-- PostgreSQL (data warehouse)
+This pipeline builds an end-to-end data engineering workflow using: -
+Kafka (streaming ingestion) - Spark (data processing) - Airflow
+(orchestration) - PostgreSQL (data warehouse)
 
-Pipeline terdiri dari:
-- Bronze → Silver → Gold layer
-- Streaming dari Kafka
-- Transformasi dengan Spark
-- Load ke data warehouse
+The pipeline consists of: - Bronze → Silver → Gold layer - Streaming
+from Kafka - Transformation using Spark - Loading into a data warehouse
 
 ## Setup & Running
 
 ### 1. Setup Environment
 
-Buat file `.env` dari template:
+Create a `.env` file from the template:
 
 cp .env.example .env
 
-Lalu isi sesuai kebutuhan (Postgres, dll).
+Then fill in the required configurations (Postgres, etc.).
 
 ### 2. Build Docker
 
-Jalankan build tanpa cache:
+Run build without cache:
 
 docker compose build --no-cache
 
-### 3. Jalankan Semua Service
+### 3. Run All Services
 
 docker compose up -d
 
-## Catatan
+## Notes
 
-Pastikan koneksi internet stabil karena Spark akan download dependencies (JAR) saat pertama kali dijalankan.
+Make sure your internet connection is stable, because Spark will
+download dependencies (JAR files) during the first run.
 
-## Akses Service
+## Access Services
 
 ### Airflow
+
 http://localhost:8080
 
-Digunakan untuk monitoring pipeline dan trigger DAG.
+Used for monitoring the pipeline and triggering the DAG.
 
 ### Kafka UI
+
 http://localhost:8085/kafkaui/
 
-Digunakan untuk cek topic Kafka dan monitor message.
+Used to check Kafka topics and monitor messages.
 
-## Menjalankan Pipeline
+## Running the Pipeline
 
-1. Buka Airflow UI
-2. Cari DAG: pipeline_olist_ecommerce
-3. Klik Trigger DAG
+1.  Open Airflow UI
+2.  Find DAG: pipeline_olist_ecommerce
+3.  Click Trigger DAG
 
-## Alur Pipeline
+## Pipeline Flow
 
-1. Check Data: scan file dari folder bronze
-2. Create Kafka Topic: membuat topic sesuai dataset
-3. Publish Data: kirim data CSV ke Kafka
-4. Silver Layer: parsing JSON, cleaning, deduplication, simpan ke Parquet
-5. Gold Layer: join dataset, build dimension dan fact table
-6. Setup Data Warehouse: create database dan schema
-7. Load Data: insert ke PostgreSQL
+1.  Check Data: scan files from bronze folder
+2.  Create Kafka Topic: create topics for each dataset
+3.  Publish Data: send CSV data to Kafka
+4.  Silver Layer: parse JSON, clean, deduplicate, save as Parquet
+5.  Gold Layer: join datasets, build dimension and fact tables
+6.  Setup Data Warehouse: create database and schema
+7.  Load Data: insert into PostgreSQL
 
-## Struktur Layer
+## Layer Structure
 
 ### Bronze
-Raw CSV
+
+Raw CSV files
 
 ### Silver
-Cleaned dan standardized data, deduplicated, disimpan sebagai Parquet
+
+Cleaned and standardized data, deduplicated, stored as Parquet
 
 ### Gold
-Data warehouse ready, terdiri dari fact dan dimension table
+
+Data warehouse-ready tables, including fact and dimension tables
 
 ## Troubleshooting
 
-### Spark download lama
-Normal pada first run, pastikan koneksi internet stabil
+### Slow Spark Dependency Download
 
+This is normal on the first run. Ensure your internet connection is
+stable.
