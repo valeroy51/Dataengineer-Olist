@@ -139,6 +139,12 @@ def cleanData(dataName,spark):
     # print("Column File")
     # totalNull.show()
     
+    print("=== DEBUG KAFKA COUNT ===")
+    print(kafka.count())
+
+    print("=== DEBUG PARSED COUNT ===")
+    print(dfParse.count())
+    
     normalize_udf = udf(normalizeText, StringType())
     
     for c in dfClean.columns:
@@ -219,15 +225,6 @@ def goldData(spark):
         
     mappingState = create_map([lit(x) for x in sum(stateMap.items(),())])
     
-    # dim_geolocation = geolocation.select(
-    #                                 "geolocation_zip_code_prefix",
-    #                                 "geolocation_lat",
-    #                                 "geolocation_lng",
-    #                                 "geolocation_city",
-    #                                 mappingState[col("geolocation_state")].alias("geolocation_state")
-    #                             )
-    
-    
     dim_geolocation = (geolocation.orderBy("geolocation_zip_code_prefix","geolocation_lat")
                         .groupBy("geolocation_zip_code_prefix")
                         .agg(
@@ -277,7 +274,7 @@ def goldData(spark):
                                 "product_width_cm"
                             ))
     
-    orders = orders.withColumn("purchase_date",to_date("order_purchase_timestamp"))
+    orders = orders.withColumn("purchase_date",to_date("order_purchase_timestamp","yyyy-MM-dd"))
     
     
     dim_purchase_date = (orders.select(
@@ -291,6 +288,14 @@ def goldData(spark):
     
     dim_purchase_date = dim_purchase_date.withColumn("date_id", row_number().over(window))
     
+    dim_purchase_date = dim_purchase_date.select(
+                                            "date_id",
+                                            "purchase_date",
+                                            "year",
+                                            "month",
+                                            "day"
+                                        )
+    
     fact_payments = payments.select(
                             "order_id",
                             "payment_sequential",
@@ -298,6 +303,8 @@ def goldData(spark):
                             "payment_installments",
                             "payment_value"
                         )
+    
+    reviews = reviews.withColumn("purchase_date",to_date("review_creation_date","yyyy-MM-dd"))
     
     fact_reviews = reviews.select(
                             "review_id",
@@ -321,7 +328,8 @@ def goldData(spark):
                     "date_id",
                     "order_status",
                     "price",
-                    "freight_value"
+                    "freight_value",
+                    (coalesce(col("price"), lit(0))+coalesce(col("freight_value"), lit(0))).alias("total_price")
                 ))
     
     goldPath = "./data/gold"

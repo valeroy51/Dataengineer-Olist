@@ -1,5 +1,3 @@
-import kaggle
-import zipfile
 import os
 from confluent_kafka  import Producer
 import json
@@ -23,6 +21,7 @@ def pathData():
     return files
 
 def publishData(topicList,server):
+    print(f"data {topicList} dikirim ke kafka")
     
     keyTopic = {"olist_customers_dataset":["customer_id"],
                 "olist_geolocation_dataset":["geolocation_zip_code_prefix","geolocation_lat","geolocation_lng"],
@@ -35,15 +34,21 @@ def publishData(topicList,server):
                 "product_category_name_translation":["product_category_name"]
                 }
     
-    def report(error,msg):
+    # def report(error,msg):
+    #     if error is not None:
+    #         print (f" Terjadi error : {error}\n")
+    #     else:
+    #         print(f"message berhasil dipublish ke {msg.topic()} partition {msg.partition()} offset {msg.offset()}\n")
+            
+    def report(error, msg):
         if error is not None:
-            print (f" Terjadi error : {error}\n")
-        else:
-            print(f"message berhasil dipublish ke {msg.topic()} partition {msg.partition()} offset {msg.offset()}\n")
+            print(f"Error: {error}")
     
     produce = Producer({
         'bootstrap.servers': server,
         'enable.idempotence': True,
+        'batch.size': 32768,
+        'linger.ms': 50
     })
     
     kagglePath = "./data/bronze"
@@ -51,7 +56,7 @@ def publishData(topicList,server):
     dataPath = os.path.join(kagglePath,f"{topicList}.csv")
     data = pd.read_csv(dataPath)
     
-    for row in data.itertuples(index=False):
+    for i, row in enumerate(data.itertuples(index=False)):
         message= {
             column: (None if pd.isna(value) else value)
             for column, value in zip(data.columns, row)
@@ -62,17 +67,21 @@ def publishData(topicList,server):
         else:
             key = str(row.iloc[0])
         
-        while True:
-            try:
-                produce.produce(topicList, 
-                                key=key.encode(),
-                                value=json.dumps(message).encode("utf-8"),
-                                callback=report
-                                )
-                break
-            except BufferError:
-                produce.poll(1)
+        try:
+            produce.produce(topicList, 
+                            key=key.encode(),
+                            value=json.dumps(message).encode("utf-8"),
+                            callback=report
+                            )
+        except BufferError:
+            produce.poll(1)
+            produce.produce(topicList, 
+                            key=key.encode(),
+                            value=json.dumps(message).encode("utf-8"),
+                            callback=report
+                            )
         
-        produce.poll(0)
+        if i % 1000 == 0:
+            produce.poll(0)
     
     produce.flush()

@@ -121,6 +121,7 @@ def createSchemaTable(SchemaName, DBName):
                     status varchar(30),
                     price double precision,
                     freightValue double precision,
+                    totalPrice double precision,
                     primary key(orderId, itemId),
                     foreign key(customerId) references {SchemaName}.dimcustomers(customerId),
                     foreign key(sellerId) references {SchemaName}.dimsellers(sellerId),

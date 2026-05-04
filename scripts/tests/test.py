@@ -11,18 +11,18 @@ from scripts.utils.connection import sparkConnection
 
 start = time.perf_counter()
 spark = sparkConnection()
-# list = pathData()
+list = pathData()
 
-# for i in list:
-#     newtopic(i)
+for i in list:
+    newtopic(i)
     
-# for i in list:  
-#     publishData(i,"kafka-1:29092,kafka-2:29093,kafka-3:29094")
+for i in list:  
+    publishData(i,"kafka-1:29092,kafka-2:29093,kafka-3:29094")
     
-# for i in list: 
-#     cleanData(i,spark)
+for i in list: 
+    cleanData(i,spark)
     
-# goldData(spark)
+goldData(spark)
 
 createDB("olistecommerce")
 

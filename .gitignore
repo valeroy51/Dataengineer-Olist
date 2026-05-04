@@ -13,5 +13,20 @@ __pycache__/
 # API
 .kaggle/kaggle.json
 
+# Airflow
+logs/*
+
 # Data
 data/
+
+!data/bronze/
+
+data/bronze/*
+
+!data/bronze/**
+
+data/bronze/**/*.zip
+
+data/silver/
+
+data/gold/

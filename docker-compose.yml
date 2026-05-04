@@ -34,6 +34,7 @@ x-airflow-common:
     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+    - ${AIRFLOW_PROJ_DIR:-.}/data:/opt/airflow/data
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
@@ -173,7 +174,7 @@ services:
 
   kafka-ui:
     container_name: kafka-ui
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     ports:
       - 8085:8080
     environment:
@@ -210,6 +211,7 @@ services:
       - 8083:8080
     volumes:
       - .:/app
+      - ./data:/opt/airflow/data
     networks:
       - network-engineer
 
@@ -226,6 +228,7 @@ services:
       - spark-master
     volumes:
       - .:/app
+      - ./data:/opt/airflow/data
     networks:
       - network-engineer
 
@@ -242,9 +245,9 @@ services:
       - spark-master
     volumes:
       - .:/app
+      - ./data:/opt/airflow/data
     networks:
       - network-engineer
-
 
   # Airflow Utils
   airflow-apiserver:
@@ -467,6 +470,7 @@ volumes:
   kafka-1-data:
   kafka-2-data:
   kafka-3-data:
+  airflow-data:
 
 networks:
   network-engineer:

@@ -10,7 +10,7 @@ def loadData(spark, DBName, schema):
     url = f"jdbc:postgresql://postgres:5432/{DBName}"
     
     tables = {
-    "dimgeolocation" :"./data/gold/dim_geolocation/",
+    "dimgeolocation" : "./data/gold/dim_geolocation/",
     "dimsellers" : "./data/gold/dim_sellers/",
     "dimcustomers" : "./data/gold/dim_customers/",
     "dimproducts" : "./data/gold/dim_products/",
@@ -85,7 +85,8 @@ def loadData(spark, DBName, schema):
         "date_id" : "dateId",
         "order_status" : "status",
         "price" : "price",
-        "freight_value" : "freightValue"
+        "freight_value" : "freightValue",
+        "total_price" : "totalPrice"
     }
     }
     
